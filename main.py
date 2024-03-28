@@ -1,89 +1,239 @@
 import psycopg2 as pg
-from flask import Flask
+from flask import Flask, request
+import json
 
 app = Flask(__name__)
 
 @app.route("/")
-def hello_world():
-    #cursor = connect_to_db()
-    return "YES"
+def hello():
+    return "hello"
 
-@app.route("/add_to_user_table/<user>")
+@app.route("/add_to_user_table")
 def add_to_user_table():
-    cursor = connect_to_db()
+    name = request.args.get("name")
+    second_name = request.args.get("second_name")
+    phone = request.args.get("phone")
+    email = request.args.get("email")
+    password = request.args.get("password")
+
+    # SQL запрос для добавления пользователя
+    sql = '''
+            INSERT INTO User_of_duno (name, second_name, phone, email, password)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING user_id;
+        '''
+
+    conn = connect_to_db()
+    cursor = conn.cursor()
+    cursor.execute(sql, (name, second_name, phone, email, password))
+    cursor.scroll(0, mode='absolute')
+    user_id = cursor.fetchone()[0]
+    conn.commit()
+    cursor.close()
+    # Ответ
+    return {"success": True, "user_id": user_id}
 
 @app.route("/add_to_meeting_table")
 def add_to_meeting_table():
-    cursor = connect_to_db()
+    title = request.args.get("title")
+    game_name = request.args.get("game_name")
+    body = request.args.get("body")
+    user_nickname = request.args.get("user_nickname")
+    status = request.args.get("status")
+    geo_marker = request.args.get("geo_marker")
+    count_players = request.args.get("count_players")
+    meeting_time = request.args.get("meeting_time")
+    closed_at = request.args.get("closed_at")
 
-@app.route("/remove_from_meeting")
-def remove_from_meeting():
-    cursor = connect_to_db()
+    # SQL запрос для получения названия игры
+    sql_game = """
+            SELECT game_name
+            FROM game
+            WHERE game_name = %s;
+        """
 
-@app.route("/change_user_information")
-def change_user_information():
-    cursor = connect_to_db()
+    # SQL запрос для добавления встречи
+    sql = """
+            INSERT INTO Meeting (title, game, body, organizer, status, geo_marker, count_players, meeting_time, closed_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING meeting_id;
+        """
 
-@app.route("/change_meeting_information")
-def change_meeting_information():
-    cursor = connect_to_db()
+    # Выполнение запроса для получения названия игры
+    conn = connect_to_db()
+    cursor = conn.cursor()
+    cursor.execute(sql_game, (game_name,))
+    game_name = cursor.fetchone()[0]
+    conn.commit()
+    cursor.close()
 
-@app.route("/select_user_information")
+    # Выполнение запроса для добавления встречи
+    cursor.execute(sql, (title, game_name, body, user_nickname, status, geo_marker, count_players, meeting_time, closed_at,  ))
+    meeting_id = cursor.fetchone()[0]
+    conn.commit()
+    cursor.close()
+
+
+    # Ответ
+    return {"success": True, "meeting_id": meeting_id}
+
+@app.route("/remove_from_meeting/<meeting_id>", methods=["DELETE"])
+def remove_from_meeting(meeting_id):
+    conn = connect_to_db()
+    sql = """
+            DELETE FROM Meetings
+            WHERE id = %s;
+        """
+
+    # Выполнение запроса
+    cursor = conn.cursor()
+    cursor.execute(sql, (meeting_id,))
+    conn.commit()
+    cursor.close()
+
+    # Ответ
+    return {"success": True}
+
+@app.route("/change_user_information/<user_id>", methods=["PUT"])
+def change_user_information(user_id):
+    password = request.args.get("password")
+    name = request.args.get("name")
+    second_name = request.args.get("second_name")
+
+    conn = connect_to_db()
+    # SQL запрос для обновления пользователя
+    sql = """
+        UPDATE users
+        SET password = IFNULL(%s, password),
+            name = IFNULL(%s, name),
+            second_name = IFNULL(%s, second_name)
+        WHERE user_id = %s;
+    """
+
+    # Выполнение запроса
+    cursor = conn.cursor()
+    cursor.execute(sql, (password, name, second_name, user_id))
+    conn.commit()
+    cursor.close()
+
+    # Ответ
+    return {"success": True}
+
+@app.route("/change_meeting_information/<meeting_id>", methods=["PUT"])
+def change_meeting_information(meeting_id):
+    body = request.args.get("body")
+    status = request.args.get("status")
+    geo_marker = request.args.get("geo_marker")
+
+    conn = connect_to_db()
+    # SQL запрос для обновления встречи
+    sql = """
+                UPDATE meetings
+                SET body = IFNULL(%s, body),
+                    status = IFNULL(%s, status),
+                    geo_marker = IFNULL(%s, geo_marker)
+                WHERE meeting_id = %s;
+            """
+
+    # Выполнение запроса
+    cursor = conn.cursor()
+    cursor.execute(sql, (body, status, geo_marker, meeting_id))
+    conn.commit()
+    cursor.close()
+
+    # Ответ
+    return {"success": True}
+
+@app.route("/select_user_information", methods=["GET"])
 def select_user_information():
-    cursor = connect_to_db()
+    nickname = request.args.get("nickname")
 
-@app.route("/select_meeting_information")
+    conn = connect_to_db()
+    # SQL запрос для получения пользователя
+    sql = """
+            SELECT *
+            FROM user_of_duno
+            WHERE nickname = %s;
+        """
+
+    # Выполнение запроса
+    cursor = conn.cursor()
+    cursor.execute(sql, (nickname,))
+    user = cursor.fetchone()
+    cursor.close()
+    colnames = [desc[0] for desc in cursor.description]
+    return_request = json.loads(json.dumps(dict(zip(colnames, user))))
+
+    # Ответ
+    if user is not None:
+        return return_request
+    else:
+        return {"success": False, "message": "User not found"}
+
+@app.route("/select_meeting_information", methods=["GET"])
 def select_meeting_information():
-    cursor = connect_to_db()
+    meeting_id = request.args.get("meeting_id")
+
+    conn = connect_to_db()
+    # SQL запрос для получения встречи
+    sql = """
+            SELECT meeting_id, title, game_id, game_name, body, status, geo_marker, user_id
+            FROM Meeting
+            WHERE meeting_id = %s;
+        """
+
+    # Выполнение запроса
+    cursor = conn.cursor()
+    cursor.execute(sql, (meeting_id,))
+    meeting = cursor.fetchone()
+    cursor.close()
+    colnames = [desc[0] for desc in cursor.description]
+    return_request = json.loads(json.dumps(dict(zip(colnames, meeting))))
+
+    # Ответ
+    if meeting is not None:
+        return return_request
+    else:
+        return {"success": False, "message": "Meeting not found"}
 
 
 
 
-def connect_to_db():
+def try_connect_to_db():
     try:
         conn = pg.connect(
             host='localhost',
-            database='Duno',
+            database='duno',
             port=5432,
             user='postgres',
             password='p_admin'
         )
-
-        cursor = conn.cursor()
         print("Connection established.")
-        return cursor
+        return True
     except Exception as err:
         print("Something went wrong.")
         print(err)
         return False
 
+def connect_to_db():
+    conn = pg.connect(
+        host='localhost',
+        database='duno',
+        port=5432,
+        user='postgres',
+        password='p_admin'
+    )
+    return conn
+
+
 
 def fetch_data(cursor):
-    cursor.execute('''SELECT* FROM Genre''')
+    cursor.execute('''SELECT* FROM \"User\"''')
     data = cursor.fetchall()
-    return data
-
-def add_to_user_table():
-    print(9)
-
-def add_to_meeting_table():
-    00
-
-def remove_from_meeting():
-    0
-
-def change_user_information():
-    0
-
-def change_meeting_information():
-    0
-
-def select_user_information():
-    0
-
-def select_meeting_information():
-    0
-
+    print(data)
 
 if __name__ == '__main__':
-    app.run(port=4000, host="0.0.0.0")
+    if try_connect_to_db():
+        app.run(port=4000, host="0.0.0.0")
+    else:
+        print(":(")
