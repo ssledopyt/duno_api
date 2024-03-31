@@ -8,7 +8,7 @@ app = Flask(__name__)
 def hello():
     return "hello"
 
-@app.route("/add_to_user_table")
+@app.route("/user", methods=["POST"])
 def add_to_user_table():
     name = request.args.get("name")
     second_name = request.args.get("second_name")
@@ -33,7 +33,61 @@ def add_to_user_table():
     # Ответ
     return {"success": True, "user_id": user_id}
 
-@app.route("/add_to_meeting_table")
+
+@app.route("/user/<user_id>", methods=["PUT"])
+def change_user_information(user_id):
+    name = request.args.get("name")
+    second_name = request.args.get("second_name")
+    password = request.args.get("password")
+
+    conn = connect_to_db()
+    # SQL запрос для обновления пользователя
+    sql = """
+        UPDATE users
+        SET password = IFNULL(%s, password),
+            name = IFNULL(%s, name),
+            second_name = IFNULL(%s, second_name)
+        WHERE user_id = %s;
+    """
+
+    # Выполнение запроса
+    cursor = conn.cursor()
+    cursor.execute(sql, (password, name, second_name, user_id))
+    conn.commit()
+    cursor.close()
+
+    # Ответ
+    return {"success": True}
+
+
+@app.route("/user", methods=["GET"])
+def select_user_information():
+    nickname = request.args.get("nickname")
+
+    conn = connect_to_db()
+    # SQL запрос для получения пользователя
+    sql = """
+            SELECT *
+            FROM user_of_duno
+            WHERE nickname = %s;
+        """
+
+    # Выполнение запроса
+    cursor = conn.cursor()
+    cursor.execute(sql, (nickname,))
+    user = cursor.fetchone()
+    cursor.close()
+    colnames = [desc[0] for desc in cursor.description]
+    return_request = json.loads(json.dumps(dict(zip(colnames, user))))
+
+    # Ответ
+    if user is not None:
+        return return_request
+    else:
+        return {"success": False, "message": "User not found"}
+
+
+@app.route("/meeting", methods = ["POST"])
 def add_to_meeting_table():
     title = request.args.get("title")
     game_name = request.args.get("game_name")
@@ -77,49 +131,8 @@ def add_to_meeting_table():
     # Ответ
     return {"success": True, "meeting_id": meeting_id}
 
-@app.route("/remove_from_meeting/<meeting_id>", methods=["DELETE"])
-def remove_from_meeting(meeting_id):
-    conn = connect_to_db()
-    sql = """
-            DELETE FROM Meetings
-            WHERE id = %s;
-        """
 
-    # Выполнение запроса
-    cursor = conn.cursor()
-    cursor.execute(sql, (meeting_id,))
-    conn.commit()
-    cursor.close()
-
-    # Ответ
-    return {"success": True}
-
-@app.route("/change_user_information/<user_id>", methods=["PUT"])
-def change_user_information(user_id):
-    password = request.args.get("password")
-    name = request.args.get("name")
-    second_name = request.args.get("second_name")
-
-    conn = connect_to_db()
-    # SQL запрос для обновления пользователя
-    sql = """
-        UPDATE users
-        SET password = IFNULL(%s, password),
-            name = IFNULL(%s, name),
-            second_name = IFNULL(%s, second_name)
-        WHERE user_id = %s;
-    """
-
-    # Выполнение запроса
-    cursor = conn.cursor()
-    cursor.execute(sql, (password, name, second_name, user_id))
-    conn.commit()
-    cursor.close()
-
-    # Ответ
-    return {"success": True}
-
-@app.route("/change_meeting_information/<meeting_id>", methods=["PUT"])
+@app.route("/meeting/<meeting_id>", methods=["PUT"])
 def change_meeting_information(meeting_id):
     body = request.args.get("body")
     status = request.args.get("status")
@@ -144,33 +157,8 @@ def change_meeting_information(meeting_id):
     # Ответ
     return {"success": True}
 
-@app.route("/select_user_information", methods=["GET"])
-def select_user_information():
-    nickname = request.args.get("nickname")
 
-    conn = connect_to_db()
-    # SQL запрос для получения пользователя
-    sql = """
-            SELECT *
-            FROM user_of_duno
-            WHERE nickname = %s;
-        """
-
-    # Выполнение запроса
-    cursor = conn.cursor()
-    cursor.execute(sql, (nickname,))
-    user = cursor.fetchone()
-    cursor.close()
-    colnames = [desc[0] for desc in cursor.description]
-    return_request = json.loads(json.dumps(dict(zip(colnames, user))))
-
-    # Ответ
-    if user is not None:
-        return return_request
-    else:
-        return {"success": False, "message": "User not found"}
-
-@app.route("/select_meeting_information", methods=["GET"])
+@app.route("/meeting", methods=["GET"])
 def select_meeting_information():
     meeting_id = request.args.get("meeting_id")
 
@@ -196,7 +184,22 @@ def select_meeting_information():
     else:
         return {"success": False, "message": "Meeting not found"}
 
+@app.route("/meeting/<meeting_id>", methods=["DELETE"])
+def remove_from_meeting(meeting_id):
+    conn = connect_to_db()
+    sql = """
+            DELETE FROM Meetings
+            WHERE id = %s;
+        """
 
+    # Выполнение запроса
+    cursor = conn.cursor()
+    cursor.execute(sql, (meeting_id,))
+    conn.commit()
+    cursor.close()
+
+    # Ответ
+    return {"success": True}
 
 
 def try_connect_to_db():
