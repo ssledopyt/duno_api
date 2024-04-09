@@ -8,6 +8,8 @@ app = Flask(__name__)
 def hello():
     return "hello"
 
+
+# Добавление пользователя
 @app.route("/user", methods=["POST"])
 def add_to_user_table():
     name = request.args.get("name")
@@ -34,6 +36,7 @@ def add_to_user_table():
     return {"success": True, "user_id": user_id}
 
 
+# Изменение информации о пользователе
 @app.route("/user/<user_id>", methods=["PUT"])
 def change_user_information(user_id):
     name = request.args.get("name")
@@ -60,6 +63,7 @@ def change_user_information(user_id):
     return {"success": True}
 
 
+# Найти информацию о пользователе по никнейму
 @app.route("/user", methods=["GET"])
 def select_user_information():
     nickname = request.args.get("nickname")
@@ -87,7 +91,8 @@ def select_user_information():
         return {"success": False, "message": "User not found"}
 
 
-@app.route("/meeting", methods = ["POST"])
+# Добавить мероприятие в таблицу
+@app.route("/meeting", methods=["POST"])
 def add_to_meeting_table():
     title = request.args.get("title")
     game_name = request.args.get("game_name")
@@ -132,6 +137,7 @@ def add_to_meeting_table():
     return {"success": True, "meeting_id": meeting_id}
 
 
+# Обновление данных встречи
 @app.route("/meeting/<meeting_id>", methods=["PUT"])
 def change_meeting_information(meeting_id):
     body = request.args.get("body")
@@ -158,25 +164,27 @@ def change_meeting_information(meeting_id):
     return {"success": True}
 
 
-@app.route("/meeting", methods=["GET"])
-def select_meeting_information():
-    meeting_id = request.args.get("meeting_id")
+# Запрос для получения встречи
+@app.route("/meeting/<int:meeting_id>", methods=["GET"])
+def select_meeting_information(meeting_id):
 
     conn = connect_to_db()
-    # SQL запрос для получения встречи
     sql = """
-            SELECT meeting_id, title, game_id, game_name, body, status, geo_marker, user_id
+            SELECT *
             FROM Meeting
             WHERE meeting_id = %s;
         """
 
     # Выполнение запроса
     cursor = conn.cursor()
-    cursor.execute(sql, (meeting_id,))
-    meeting = cursor.fetchone()
-    cursor.close()
-    colnames = [desc[0] for desc in cursor.description]
-    return_request = json.loads(json.dumps(dict(zip(colnames, meeting))))
+    try:
+        cursor.execute(sql, (meeting_id,))
+        meeting = cursor.fetchone()
+        cursor.close()
+        colnames = [desc[0] for desc in cursor.description]
+        return_request = json.loads(json.dumps(dict(zip(colnames, meeting))))
+    except Exception:
+        meeting = None
 
     # Ответ
     if meeting is not None:
@@ -184,6 +192,39 @@ def select_meeting_information():
     else:
         return {"success": False, "message": "Meeting not found"}
 
+
+# Запрос для получения всех встреч
+@app.route("/meeting", methods=["GET"])
+def select_meetings():
+
+    conn = connect_to_db()
+    sql = """
+            SELECT *
+            FROM Meeting
+        """
+
+    # Выполнение запроса
+    cursor = conn.cursor()
+    cursor.execute(sql)
+    meeting = cursor.fetchall()
+    cursor.close()
+    colnames = [desc[0] for desc in cursor.description]
+    print(colnames)
+    print(meeting)
+
+    return_request = []
+    for x in meeting:
+        return_request.append(dict(zip(colnames, x)))
+    return_request = json.loads(json.dumps(return_request))
+
+    # Ответ
+    if meeting is not None:
+        return return_request
+    else:
+        return {"success": False, "message": "Meetings not found"}
+
+
+# Запрос для удаления встречи
 @app.route("/meeting/<meeting_id>", methods=["DELETE"])
 def remove_from_meeting(meeting_id):
     conn = connect_to_db()
@@ -202,6 +243,7 @@ def remove_from_meeting(meeting_id):
     return {"success": True}
 
 
+# Попытка подключения к БД
 def try_connect_to_db():
     try:
         conn = pg.connect(
@@ -234,6 +276,11 @@ def fetch_data(cursor):
     cursor.execute('''SELECT* FROM \"User\"''')
     data = cursor.fetchall()
     print(data)
+
+
+def sql_exc():
+    222
+
 
 if __name__ == '__main__':
     if try_connect_to_db():
