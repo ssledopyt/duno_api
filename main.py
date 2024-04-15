@@ -243,6 +243,27 @@ def remove_from_meeting(meeting_id):
     return {"success": True}
 
 
+# Запрос для получения всех лайков пользователя.
+@app.route("/likes/<nickname>", methods=["GET"])
+def remove_from_meeting(nickname):
+    conn = connect_to_db()
+    sql = """
+            SELECT DISTINCT *
+            FROM meetings AS m
+            INNER JOIN likes AS l ON m.id = l.meeting_id
+            WHERE l.nickname = %s;
+        """
+
+    # Выполнение запроса
+    cursor = conn.cursor()
+    cursor.execute(sql, (nickname,))
+    conn.commit()
+    cursor.close()
+
+    # Ответ
+    return {"success": True}
+
+
 # Попытка подключения к БД
 def try_connect_to_db():
     try:
