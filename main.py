@@ -1,6 +1,7 @@
 import psycopg2 as pg
 from flask import Flask, request
 import json
+import hashlib
 
 app = Flask(__name__)
 
@@ -9,18 +10,23 @@ def hello():
     return "hello"
 
 
-# Добавление пользователя
+# ----------------------------------------------------------------------------------
+# ---------------------------------ПОЛЬЗОВАТЕЛЬ-------------------------------------
+# ----------------------------------------------------------------------------------
+
+
+# ДОБАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯ
 @app.route("/user", methods=["POST"])
 def add_to_user_table():
     name = request.args.get("name")
     second_name = request.args.get("second_name")
     phone = request.args.get("phone")
     email = request.args.get("email")
-    password = request.args.get("password")
+    password = hashlib.sha256(request.args.get("password").encode('utf-8')).hexdigest()
 
     # SQL запрос для добавления пользователя
     sql = '''
-            INSERT INTO User_of_duno (name, second_name, phone, email, password)
+            INSERT INTO users (name, second_name, phone, email, password)
             VALUES (%s, %s, %s, %s, %s)
             RETURNING user_id;
         '''
@@ -34,6 +40,39 @@ def add_to_user_table():
     cursor.close()
     # Ответ
     return {"success": True, "user_id": user_id}
+
+
+# ПРОВЕРКА ПАРОЛЯ НА КОРРЕКТНОСТЬ
+@app.route("/check_pass", methods=["GET"])
+def check_password():
+    nickname = request.args.get("nickname")
+    password = request.args.get("password")
+    # SQL запрос
+    sql = """
+        SELECT password
+        FROM users
+        WHERE nickname = %s;
+    """
+    conn = connect_to_db()
+
+    # Выполнение запроса
+    cursor = conn.cursor()
+    cursor.execute(sql, (nickname,))
+
+    # Получение результата
+    user_data = cursor.fetchone()
+
+    # Закрытие курсора
+    cursor.close()
+    # Проверка пароля
+    if user_data is not None:
+        stored_password_hash = user_data[0]
+        print(user_data, stored_password_hash)
+        #input_password_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
+
+        return str(stored_password_hash == password).lower()
+    else:
+        return str(False).lower()
 
 
 # Изменение информации о пользователе
@@ -64,15 +103,14 @@ def change_user_information(user_id):
 
 
 # Найти информацию о пользователе по никнейму
-@app.route("/user", methods=["GET"])
-def select_user_information():
-    nickname = request.args.get("nickname")
+@app.route("/user/<nickname>", methods=["GET"])
+def select_user_information(nickname):
 
     conn = connect_to_db()
     # SQL запрос для получения пользователя
     sql = """
             SELECT *
-            FROM user_of_duno
+            FROM users
             WHERE nickname = %s;
         """
 
@@ -135,6 +173,11 @@ def add_to_meeting_table():
 
     # Ответ
     return {"success": True, "meeting_id": meeting_id}
+
+
+# ----------------------------------------------------------------------------------
+# ------------------------------------ВСТРЕЧИ---------------------------------------
+# ----------------------------------------------------------------------------------
 
 
 # Обновление данных встречи
@@ -245,23 +288,42 @@ def remove_from_meeting(meeting_id):
 
 # Запрос для получения всех лайков пользователя.
 @app.route("/likes/<nickname>", methods=["GET"])
-def remove_from_meeting(nickname):
+def user_likes(nickname):
     conn = connect_to_db()
     sql = """
-            SELECT DISTINCT *
-            FROM meetings AS m
-            INNER JOIN likes AS l ON m.id = l.meeting_id
+            SELECT m.meeting_id
+            FROM meeting AS m
+            JOIN likes AS l ON m.meeting_id = l.meeting_id
             WHERE l.nickname = %s;
         """
 
     # Выполнение запроса
     cursor = conn.cursor()
-    cursor.execute(sql, (nickname,))
-    conn.commit()
-    cursor.close()
+    try:
+        cursor.execute(sql, (nickname,))
+        meeting = cursor.fetchall()
+        cursor.close()
+        colnames = [desc[0] for desc in cursor.description]
+        return_request = {}
+        dict_meeting = []
+        print(meeting)
+        for x in meeting:
+            dict_meeting.append(x[0])
+        popp = dict.fromkeys(colnames, dict_meeting)
+        return_request = json.loads(json.dumps(popp))
+    except Exception:
+        meeting = None
 
     # Ответ
-    return {"success": True}
+    if meeting is not None:
+        return return_request
+    else:
+        return {"success": False, "message": "Likes not found"}
+
+
+# ----------------------------------------------------------------------------------
+# ------------------------------------START DB--------------------------------------
+# ----------------------------------------------------------------------------------
 
 
 # Попытка подключения к БД
@@ -281,6 +343,7 @@ def try_connect_to_db():
         print(err)
         return False
 
+
 def connect_to_db():
     conn = pg.connect(
         host='localhost',
@@ -290,17 +353,6 @@ def connect_to_db():
         password='p_admin'
     )
     return conn
-
-
-
-def fetch_data(cursor):
-    cursor.execute('''SELECT* FROM \"User\"''')
-    data = cursor.fetchall()
-    print(data)
-
-
-def sql_exc():
-    222
 
 
 if __name__ == '__main__':
