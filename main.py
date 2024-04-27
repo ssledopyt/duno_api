@@ -15,31 +15,33 @@ def hello():
 # ----------------------------------------------------------------------------------
 
 
-# ДОБАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯ
+# ДОБАВЛЕНИЕ/РЕГИСТРАЦИЯ ПОЛЬЗОВАТЕЛЯ
 @app.route("/user", methods=["POST"])
 def add_to_user_table():
     name = request.args.get("name")
     second_name = request.args.get("second_name")
     phone = request.args.get("phone")
     email = request.args.get("email")
-    password = hashlib.sha256(request.args.get("password").encode('utf-8')).hexdigest()
+    #password = hashlib.sha256(request.args.get("password").encode('utf-8')).hexdigest()
+    password = request.args.get("password")
+    nickname = request.args.get("nickname")
 
     # SQL запрос для добавления пользователя
     sql = '''
-            INSERT INTO users (name, second_name, phone, email, password)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO users (name, second_name, phone, email, password, nickname)
+            VALUES (%s, %s, %s, %s, %s, %s)
             RETURNING user_id;
         '''
 
     conn = connect_to_db()
     cursor = conn.cursor()
-    cursor.execute(sql, (name, second_name, phone, email, password))
+    cursor.execute(sql, (name, second_name, phone, email, password, nickname,),)
     cursor.scroll(0, mode='absolute')
     user_id = cursor.fetchone()[0]
     conn.commit()
     cursor.close()
     # Ответ
-    return {"success": True, "user_id": user_id}
+    return str(True).lower()
 
 
 # ПРОВЕРКА ПАРОЛЯ НА КОРРЕКТНОСТЬ
@@ -238,7 +240,7 @@ def select_meeting_information(meeting_id):
 
 # Запрос для получения всех встреч
 @app.route("/meeting", methods=["GET"])
-def select_meetings():
+def get_all_meetings():
 
     conn = connect_to_db()
     sql = """
@@ -264,7 +266,7 @@ def select_meetings():
     if meeting is not None:
         return return_request
     else:
-        return {"success": False, "message": "Meetings not found"}
+        return {"message": "Meetings not found"}
 
 
 # Запрос для удаления встречи
@@ -318,7 +320,7 @@ def user_likes(nickname):
     if meeting is not None:
         return return_request
     else:
-        return {"success": False, "message": "Likes not found"}
+        return str(False).lower()
 
 
 # ----------------------------------------------------------------------------------
