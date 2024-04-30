@@ -2,6 +2,7 @@ import psycopg2 as pg
 from flask import Flask, request
 import json
 import hashlib
+import datetime
 
 app = Flask(__name__)
 
@@ -130,6 +131,10 @@ def select_user_information(nickname):
     else:
         return {"success": False, "message": "User not found"}
 
+# ----------------------------------------------------------------------------------
+# ------------------------------------ВСТРЕЧИ---------------------------------------
+# ----------------------------------------------------------------------------------
+
 
 # Добавить мероприятие в таблицу
 @app.route("/meeting", methods=["POST"])
@@ -175,11 +180,6 @@ def add_to_meeting_table():
 
     # Ответ
     return {"success": True, "meeting_id": meeting_id}
-
-
-# ----------------------------------------------------------------------------------
-# ------------------------------------ВСТРЕЧИ---------------------------------------
-# ----------------------------------------------------------------------------------
 
 
 # Обновление данных встречи
@@ -255,11 +255,16 @@ def get_all_meetings():
     cursor.close()
     colnames = [desc[0] for desc in cursor.description]
     print(colnames)
-    print(meeting)
+    #print(meeting)
 
     return_request = []
+
     for x in meeting:
+        x=list(x)
+        x[5] = x[5].isoformat()
+        x[10] = x[10].isoformat()
         return_request.append(dict(zip(colnames, x)))
+    print(return_request)
     return_request = json.loads(json.dumps(return_request))
 
     # Ответ
@@ -323,6 +328,96 @@ def user_likes(nickname):
         return str(False).lower()
 
 
+# Запрос для добавления\удаления лайков пользователя.
+# Надо сделать сначала обработку встреча-(булеан=1), то есть добавить встречу, потом наоборот
+@app.route("/likes/<nickname>/", methods=["POST"])
+def put_user_likes(nickname):
+    conn = connect_to_db()
+    sql = """
+            SELECT m.meeting_id
+            FROM meeting AS m
+            JOIN likes AS l ON m.meeting_id = l.meeting_id
+            WHERE l.nickname = %s;
+        """
+
+    # Выполнение запроса
+    cursor = conn.cursor()
+    try:
+        cursor.execute(sql, (nickname,))
+        meeting = cursor.fetchall()
+        cursor.close()
+        colnames = [desc[0] for desc in cursor.description]
+        return_request = {}
+        dict_meeting = []
+        print(meeting)
+        for x in meeting:
+            dict_meeting.append(x[0])
+        popp = dict.fromkeys(colnames, dict_meeting)
+        return_request = json.loads(json.dumps(popp))
+    except Exception:
+        meeting = None
+
+    # Ответ
+    if meeting is not None:
+        return return_request
+    else:
+        return str(False).lower()
+
+
+# Получить все жанры
+@app.route("/genre", methods=["GET"])
+def get_all_genres():
+    conn = connect_to_db()
+    # SQL запрос для получения пользователя
+    sql = """
+            SELECT name
+            FROM genre;
+        """
+
+    # Выполнение запроса
+    cursor = conn.cursor()
+    cursor.execute(sql, )
+    genre = cursor.fetchall()
+    cursor.close()
+    colnames = [desc[0] for desc in cursor.description]
+    return_request = []
+    for x in genre:
+        return_request.append(dict(zip(colnames, x)))
+    return_request = json.loads(json.dumps(return_request))
+
+    # Ответ
+    if genre is not None:
+        return return_request
+    else:
+        return str(False).lower()
+
+
+# Получить все игры
+@app.route("/games", methods=["GET"])
+def get_all_games():
+    conn = connect_to_db()
+    # SQL запрос для получения пользователя
+    sql = """
+            SELECT game_name
+            FROM game;
+        """
+
+    # Выполнение запроса
+    cursor = conn.cursor()
+    cursor.execute(sql, )
+    game = cursor.fetchall()
+    cursor.close()
+    colnames = [desc[0] for desc in cursor.description]
+    return_request = []
+    for x in game:
+        return_request.append(dict(zip(colnames, x)))
+    return_request = json.loads(json.dumps(return_request))
+
+    # Ответ
+    if game is not None:
+        return return_request
+    else:
+        return str(False).lower()
 # ----------------------------------------------------------------------------------
 # ------------------------------------START DB--------------------------------------
 # ----------------------------------------------------------------------------------
@@ -356,6 +451,26 @@ def connect_to_db():
     )
     return conn
 
+def timestamp_to_json(results):
+    # Инициализация списка
+    data = []
+
+    # Обработка результатов
+    for row in results:
+        timestamp = row[0]
+
+        # Преобразование timestamp в JSON-совместимый формат
+        # (в зависимости от ваших требований)
+        if isinstance(timestamp, datetime.datetime):
+            timestamp_json = timestamp.isoformat()
+        elif isinstance(timestamp, datetime.date):
+            timestamp_json = timestamp.isoformat()
+        else:
+            timestamp_json = str(timestamp)
+
+        # Добавление timestamp в список
+        data.append({"timestamp": timestamp_json})
+    return data
 
 if __name__ == '__main__':
     if try_connect_to_db():
