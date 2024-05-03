@@ -1,5 +1,5 @@
 import psycopg2 as pg
-from flask import Flask, request
+from flask import Flask, request, jsonify
 import json
 import hashlib
 import datetime
@@ -102,7 +102,7 @@ def change_user_information(user_id):
     cursor.close()
 
     # Ответ
-    return {"success": True}
+    return str(True).lower()
 
 
 # Найти информацию о пользователе по никнейму
@@ -123,11 +123,11 @@ def select_user_information(nickname):
     user = cursor.fetchone()
     cursor.close()
     colnames = [desc[0] for desc in cursor.description]
-    return_request = json.loads(json.dumps(dict(zip(colnames, user))))
+    return_request = dict(zip(colnames, user))
 
     # Ответ
     if user is not None:
-        return return_request
+        return jsonify(return_request)
     else:
         return {"success": False, "message": "User not found"}
 
@@ -179,7 +179,7 @@ def add_to_meeting_table():
 
 
     # Ответ
-    return {"success": True, "meeting_id": meeting_id}
+    return str(True).lower()
 
 
 # Обновление данных встречи
@@ -206,13 +206,12 @@ def change_meeting_information(meeting_id):
     cursor.close()
 
     # Ответ
-    return {"success": True}
+    return str(True).lower()
 
 
 # Запрос для получения встречи
 @app.route("/meeting/<int:meeting_id>", methods=["GET"])
 def select_meeting_information(meeting_id):
-
     conn = connect_to_db()
     sql = """
             SELECT *
@@ -227,15 +226,15 @@ def select_meeting_information(meeting_id):
         meeting = cursor.fetchone()
         cursor.close()
         colnames = [desc[0] for desc in cursor.description]
-        return_request = json.loads(json.dumps(dict(zip(colnames, meeting))))
+        return_request = dict(zip(colnames, meeting))
     except Exception:
         meeting = None
 
     # Ответ
     if meeting is not None:
-        return return_request
+        return jsonify(return_request)
     else:
-        return {"success": False, "message": "Meeting not found"}
+        return str(False).lower()
 
 
 # Запрос для получения всех встреч
@@ -265,11 +264,11 @@ def get_all_meetings():
         x[10] = x[10].isoformat()
         return_request.append(dict(zip(colnames, x)))
     print(return_request)
-    return_request = json.loads(json.dumps(return_request))
+    return_request = return_request
 
     # Ответ
     if meeting is not None:
-        return return_request
+        return jsonify(return_request)
     else:
         return {"message": "Meetings not found"}
 
@@ -317,13 +316,13 @@ def user_likes(nickname):
         for x in meeting:
             dict_meeting.append(x[0])
         popp = dict.fromkeys(colnames, dict_meeting)
-        return_request = json.loads(json.dumps(popp))
+        return_request = popp
     except Exception:
         meeting = None
 
     # Ответ
     if meeting is not None:
-        return return_request
+        return jsonify(return_request)
     else:
         return str(False).lower()
 
@@ -353,13 +352,13 @@ def put_user_likes(nickname):
         for x in meeting:
             dict_meeting.append(x[0])
         popp = dict.fromkeys(colnames, dict_meeting)
-        return_request = json.loads(json.dumps(popp))
+        return_request = popp
     except Exception:
         meeting = None
 
     # Ответ
     if meeting is not None:
-        return return_request
+        return jsonify(return_request)
     else:
         return str(False).lower()
 
@@ -383,11 +382,11 @@ def get_all_genres():
     return_request = []
     for x in genre:
         return_request.append(dict(zip(colnames, x)))
-    return_request = json.loads(json.dumps(return_request))
+    return_request = return_request
 
     # Ответ
     if genre is not None:
-        return return_request
+        return jsonify(return_request)
     else:
         return str(False).lower()
 
@@ -411,11 +410,11 @@ def get_all_games():
     return_request = []
     for x in game:
         return_request.append(dict(zip(colnames, x)))
-    return_request = json.loads(json.dumps(return_request))
-
+    return_request = return_request
+    print(return_request)
     # Ответ
     if game is not None:
-        return return_request
+        return jsonify(return_request)
     else:
         return str(False).lower()
 # ----------------------------------------------------------------------------------
