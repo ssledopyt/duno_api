@@ -1,8 +1,12 @@
+import time
+
 import psycopg2 as pg
+from psycopg2.extensions import register_adapter
 from flask import Flask, request, jsonify
 import json
 import hashlib
 import datetime
+from ast import literal_eval
 
 app = Flask(__name__)
 
@@ -143,40 +147,39 @@ def add_to_meeting_table():
     game_name = request.args.get("game_name")
     body = request.args.get("body")
     user_nickname = request.args.get("user_nickname")
-    status = request.args.get("status")
+    status = bool(request.args.get("status"))
+    genre = request.args.get("genre")
     geo_marker = request.args.get("geo_marker")
-    count_players = request.args.get("count_players")
-    meeting_time = request.args.get("meeting_time")
+    count_players = int(request.args.get("count_players"))
+    meeting_time = time.localtime(int(request.args.get("meeting_time")) / 1000)
     closed_at = request.args.get("closed_at")
+    closed_at = None
 
-    # SQL запрос для получения названия игры
-    sql_game = """
-            SELECT game_name
-            FROM game
-            WHERE game_name = %s;
-        """
+    meeting_geo = literal_eval(geo_marker)
+    meeting_geo = f"({meeting_geo[0]}, {meeting_geo[1]})"
+    meeting_datetime = datetime.datetime(
+        meeting_time.tm_year,
+        meeting_time.tm_mon,
+        meeting_time.tm_mday,
+        meeting_time.tm_hour,
+        meeting_time.tm_min
+    )
 
+    #print(title, game_name, body, status, user_nickname, meeting_geo, count_players, meeting_datetime, closed_at)
     # SQL запрос для добавления встречи
     sql = """
-            INSERT INTO Meeting (title, game, body, organizer, status, geo_marker, count_players, meeting_time, closed_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO Meeting (title, game, body, organizer, status, geo_marker, genre, count_players, meeting_time, closed_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING meeting_id;
         """
 
     # Выполнение запроса для получения названия игры
     conn = connect_to_db()
     cursor = conn.cursor()
-    cursor.execute(sql_game, (game_name,))
-    game_name = cursor.fetchone()[0]
-    conn.commit()
-    cursor.close()
-
     # Выполнение запроса для добавления встречи
-    cursor.execute(sql, (title, game_name, body, user_nickname, status, geo_marker, count_players, meeting_time, closed_at,  ))
-    meeting_id = cursor.fetchone()[0]
+    cursor.execute(sql, (title, game_name, body, user_nickname, status, meeting_geo, genre, count_players, meeting_datetime, closed_at, ))
     conn.commit()
     cursor.close()
-
 
     # Ответ
     return str(True).lower()
@@ -214,23 +217,40 @@ def change_meeting_information(meeting_id):
 def select_meeting_information(meeting_id):
     conn = connect_to_db()
     sql = """
-            SELECT *
-            FROM Meeting
-            WHERE meeting_id = %s;
+            SELECT m.*, loc.name_of_club 
+            FROM Meeting as  m inner join 
+            location_of_stationary_place as loc
+            ON loc.geo_marker ~= m.geo_marker
+            WHERE meeting_id = %s ;
         """
-
+    # sql2 = """
+    #         SELECT loc.name_of_club
+    #         FROM location_of_stationary_place as loc, meeting as m
+    #         where loc.geo_marker ~= m.geo_marker and m.meeting_id = %s
+    # """
     # Выполнение запроса
     cursor = conn.cursor()
-    try:
-        cursor.execute(sql, (meeting_id,))
-        meeting = cursor.fetchone()
-        cursor.close()
-        colnames = [desc[0] for desc in cursor.description]
-        return_request = dict(zip(colnames, meeting))
-    except Exception:
-        meeting = None
+    cursor.execute(sql, (meeting_id,))
+    meeting = cursor.fetchone()
+    colnames = [desc[0] for desc in cursor.description]
 
+    # cursor.execute(sql2, (meeting_id,))
+    # meeting_club = cursor.fetchone()
+    # colname_club = [desc[0] for desc in cursor.description]
+
+    return_request = []
+    cursor.close()
+    meeting = list(meeting)
+    meeting[5] = meeting[5].isoformat()
+    meeting[10] = meeting[10].isoformat()
+    meeting[7] = literal_eval(meeting[7])
+
+    # meeting.append(meeting_club[0])
+    # colnames.append(colname_club[0])
+    # print(meeting, colnames)
+    return_request = dict(zip(colnames, meeting))
     # Ответ
+
     if meeting is not None:
         return jsonify(return_request)
     else:
@@ -243,9 +263,12 @@ def get_all_meetings():
 
     conn = connect_to_db()
     sql = """
-            SELECT *
-            FROM Meeting
+            SELECT m.*, loc.name_of_club 
+            FROM Meeting as  m inner join 
+            location_of_stationary_place as loc
+            ON loc.geo_marker ~= m.geo_marker
         """
+
 
     # Выполнение запроса
     cursor = conn.cursor()
@@ -260,8 +283,9 @@ def get_all_meetings():
 
     for x in meeting:
         x=list(x)
-        x[5] = x[5].isoformat()
+        x[5] = x[5].isoformat() if x[5] is not None else x[5]
         x[10] = x[10].isoformat()
+        x[7] = literal_eval(x[7])
         return_request.append(dict(zip(colnames, x)))
     print(return_request)
     return_request = return_request
@@ -329,38 +353,40 @@ def user_likes(nickname):
 
 # Запрос для добавления\удаления лайков пользователя.
 # Надо сделать сначала обработку встреча-(булеан=1), то есть добавить встречу, потом наоборот
-@app.route("/likes/<nickname>/", methods=["POST"])
-def put_user_likes(nickname):
+@app.route("/likes/<nickname>/<eventId>", methods=["POST"])
+def put_user_like(nickname, eventId):
     conn = connect_to_db()
     sql = """
-            SELECT m.meeting_id
-            FROM meeting AS m
-            JOIN likes AS l ON m.meeting_id = l.meeting_id
-            WHERE l.nickname = %s;
+            INSERT INTO likes (meeting_id, nickname)
+            VALUES (%s , %s);
         """
 
     # Выполнение запроса
     cursor = conn.cursor()
-    try:
-        cursor.execute(sql, (nickname,))
-        meeting = cursor.fetchall()
-        cursor.close()
-        colnames = [desc[0] for desc in cursor.description]
-        return_request = {}
-        dict_meeting = []
-        print(meeting)
-        for x in meeting:
-            dict_meeting.append(x[0])
-        popp = dict.fromkeys(colnames, dict_meeting)
-        return_request = popp
-    except Exception:
-        meeting = None
+    cursor.execute(sql, (eventId, nickname,))
+    conn.commit()
+    cursor.close()
 
     # Ответ
-    if meeting is not None:
-        return jsonify(return_request)
-    else:
-        return str(False).lower()
+    return {"success": True}
+
+
+@app.route("/likes/<nickname>/<eventId>", methods=["DELETE"])
+def delete_user_like(nickname, eventId):
+    conn = connect_to_db()
+    sql = """
+            DELETE FROM likes
+            WHERE meeting_id = %s AND nickname = %s;
+        """
+
+    # Выполнение запроса
+    cursor = conn.cursor()
+    cursor.execute(sql, (eventId, nickname,))
+    conn.commit()
+    cursor.close()
+
+    # Ответ
+    return {"success": True}
 
 
 # Получить все жанры
@@ -389,6 +415,40 @@ def get_all_genres():
         return jsonify(return_request)
     else:
         return str(False).lower()
+
+
+# Получить всех мест клубов
+@app.route("/places", methods=["GET"])
+def get_all_places():
+    conn = connect_to_db()
+    # SQL запрос для получения пользователя
+    sql = """
+            SELECT *
+            FROM location_of_stationary_place;
+        """
+
+    # Выполнение запроса
+    cursor = conn.cursor()
+    cursor.execute(sql, )
+    places = cursor.fetchall()
+    cursor.close()
+    colnames = [desc[0] for desc in cursor.description]
+    print(colnames)
+    # print(meeting)
+
+    return_request = []
+
+    for x in places:
+        x = list(x)
+        x[1] = literal_eval(x[1])
+        return_request.append(dict(zip(colnames, x)))
+    print(return_request)
+
+    # Ответ
+    if places is not None:
+        return jsonify(return_request)
+    else:
+        return {"message": "Places not found"}
 
 
 # Получить все игры
