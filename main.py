@@ -133,7 +133,7 @@ def select_user_information(nickname):
     if user is not None:
         return jsonify(return_request)
     else:
-        return {"success": False, "message": "User not found"}
+        return str(False).lower()
 
 # ----------------------------------------------------------------------------------
 # ------------------------------------ВСТРЕЧИ---------------------------------------
@@ -141,7 +141,7 @@ def select_user_information(nickname):
 
 
 # Добавить мероприятие в таблицу
-@app.route("/meeting", methods=["POST"])
+@app.route("/meeting/add", methods=["POST"])
 def add_to_meeting_table():
     title = request.args.get("title")
     game_name = request.args.get("game_name")
@@ -152,8 +152,7 @@ def add_to_meeting_table():
     geo_marker = request.args.get("geo_marker")
     count_players = int(request.args.get("count_players"))
     meeting_time = time.localtime(int(request.args.get("meeting_time")) / 1000)
-    closed_at = request.args.get("closed_at")
-    closed_at = None
+
 
     meeting_geo = literal_eval(geo_marker)
     meeting_geo = f"({meeting_geo[0]}, {meeting_geo[1]})"
@@ -164,47 +163,45 @@ def add_to_meeting_table():
         meeting_time.tm_hour,
         meeting_time.tm_min
     )
-
-    #print(title, game_name, body, status, user_nickname, meeting_geo, count_players, meeting_datetime, closed_at)
     # SQL запрос для добавления встречи
     sql = """
-            INSERT INTO Meeting (title, game, body, organizer, status, geo_marker, genre, count_players, meeting_time, closed_at)
+            INSERT INTO Meeting (title, game, body, organizer, status, geo_marker, genre, count_players, meeting_time)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING meeting_id;
         """
 
-    # Выполнение запроса для получения названия игры
     conn = connect_to_db()
     cursor = conn.cursor()
     # Выполнение запроса для добавления встречи
-    cursor.execute(sql, (title, game_name, body, user_nickname, status, meeting_geo, genre, count_players, meeting_datetime, closed_at, ))
+    cursor.execute(sql, (title, game_name, body, user_nickname, status, meeting_geo, genre, count_players, meeting_datetime, ))
     conn.commit()
     cursor.close()
 
     # Ответ
     return str(True).lower()
 
+#ПОМЕНЯТЬ НА ТОЛЬКО ИЗМЕНЕНИЕ ОПИСАНИЯ и СТАТУСА
 
 # Обновление данных встречи
 @app.route("/meeting/<meeting_id>", methods=["PUT"])
 def change_meeting_information(meeting_id):
     body = request.args.get("body")
     status = request.args.get("status")
-    geo_marker = request.args.get("geo_marker")
+    #geo_marker = request.args.get("geo_marker")
 
     conn = connect_to_db()
     # SQL запрос для обновления встречи
     sql = """
-                UPDATE meetings
-                SET body = IFNULL(%s, body),
-                    status = IFNULL(%s, status),
-                    geo_marker = IFNULL(%s, geo_marker)
+                UPDATE meeting
+                SET body = %s,
+                    status = %s
                 WHERE meeting_id = %s;
             """
+#                    geo_marker = %s
 
     # Выполнение запроса
     cursor = conn.cursor()
-    cursor.execute(sql, (body, status, geo_marker, meeting_id))
+    cursor.execute(sql, (body, status, meeting_id))
     conn.commit()
     cursor.close()
 
@@ -273,25 +270,23 @@ def get_all_meetings():
     # Выполнение запроса
     cursor = conn.cursor()
     cursor.execute(sql)
-    meeting = cursor.fetchall()
+    meetings = cursor.fetchall()
     cursor.close()
     colnames = [desc[0] for desc in cursor.description]
     print(colnames)
-    #print(meeting)
 
     return_request = []
 
-    for x in meeting:
-        x=list(x)
-        x[5] = x[5].isoformat() if x[5] is not None else x[5]
-        x[10] = x[10].isoformat()
-        x[7] = literal_eval(x[7])
-        return_request.append(dict(zip(colnames, x)))
+    for meeting in meetings:
+        meeting = list(meeting)
+        meeting[9] = meeting[9].isoformat()
+        meeting[6] = literal_eval(meeting[6])
+        return_request.append(dict(zip(colnames, meeting)))
     print(return_request)
     return_request = return_request
 
     # Ответ
-    if meeting is not None:
+    if meetings is not None:
         return jsonify(return_request)
     else:
         return {"message": "Meetings not found"}
@@ -302,8 +297,8 @@ def get_all_meetings():
 def remove_from_meeting(meeting_id):
     conn = connect_to_db()
     sql = """
-            DELETE FROM Meetings
-            WHERE id = %s;
+            DELETE FROM meeting
+            WHERE meeting_id = %s;
         """
 
     # Выполнение запроса
@@ -313,7 +308,7 @@ def remove_from_meeting(meeting_id):
     cursor.close()
 
     # Ответ
-    return {"success": True}
+    return str(True).lower()
 
 
 # Запрос для получения всех лайков пользователя.
@@ -457,7 +452,7 @@ def get_all_games():
     conn = connect_to_db()
     # SQL запрос для получения пользователя
     sql = """
-            SELECT game_name
+            SELECT*
             FROM game;
         """
 
