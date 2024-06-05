@@ -166,7 +166,7 @@ def add_to_meeting_table():
     # SQL запрос для добавления встречи
     sql = """
             INSERT INTO Meeting (title, game, body, organizer, status, geo_marker, genre, count_players, meeting_time)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING meeting_id;
         """
 
