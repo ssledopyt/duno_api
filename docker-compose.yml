@@ -1,0 +1,50 @@
+version: '3.9'
+
+services:
+
+  server:
+    build: 
+      context: .
+    restart: always
+    ports:
+      - "4000:4000"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=p_admin
+      - POSTGRES_DB=duno
+      # адрес контейнера базы данных
+      - DB_HOST=172.18.0.3
+    networks:
+      husky:
+          ipv4_address: 172.18.0.2
+    depends_on:
+      db:
+        condition: service_started
+
+  db:
+    image: postgres:15
+    container_name: postgres_db
+    restart: always
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./datab:/docker-entrypoint-initdb.d/
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=p_admin
+      - POSTGRES_DB=duno
+      - DATABASE_URL=postgres://postgresql:p_admin@db:5432/duno
+    ports:
+      - "5432:5432"
+    networks:
+      husky:
+          ipv4_address: 172.18.0.3
+
+
+volumes:
+  db_data:
+networks:
+  husky:
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.18.0.0/24

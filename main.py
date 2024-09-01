@@ -1,4 +1,5 @@
 import time
+import env
 
 import psycopg2 as pg
 from psycopg2.extensions import register_adapter
@@ -481,11 +482,11 @@ def get_all_games():
 def try_connect_to_db():
     try:
         conn = pg.connect(
-            host='localhost',
-            database='duno',
+            host = env.DB_HOST,
+            database=env.PSQL_DB,
             port=5432,
-            user='postgres',
-            password='p_admin'
+            user=env.PSQL_USER,
+            password=env.PSQL_PASS
         )
         print("Connection established.")
         return True
@@ -497,11 +498,11 @@ def try_connect_to_db():
 
 def connect_to_db():
     conn = pg.connect(
-        host='localhost',
-        database='duno',
+        host = env.DB_HOST,
+        database=env.PSQL_DB,
         port=5432,
-        user='postgres',
-        password='p_admin'
+        user=env.PSQL_USER,
+        password=env.PSQL_PASS
     )
     return conn
 
@@ -528,6 +529,6 @@ def timestamp_to_json(results):
 
 if __name__ == '__main__':
     if try_connect_to_db():
-        app.run(port=4000, host="0.0.0.0")
+        app.run(port=4000)
     else:
-        print(":(")
+        print("No connection\t :(")
